@@ -1,6 +1,6 @@
-ITEMS	 := 10
-THREADS	 := 2
-SHOWDATA := 1
+ITEMS	 := 500000
+THREADS	 := 8
+SHOWDATA := 0
 
 
 CC		:= gcc
