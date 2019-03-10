@@ -1,4 +1,4 @@
-/** 
+/*
  * ~~~~~~~~~~~~~~~~~~
  * ~~~ Discussion ~~~
  * ~~~~~~~~~~~~~~~~~~
@@ -11,7 +11,7 @@
  *      - Packing of arguments to be used by threads
  *      - Creation of threads
  *
- * Afterwards, each thread executes the "threadfunction" method. This method has been
+ * Afterwards, each thread executes the "thread_function" method. This method has been
  * written in a way that provides a level of abstraction so that the algorithm outline
  * is obvious. That is, all calculations have been moved to other methods and are inv-
  * oked through the thread method. This way, the implementation is more reader-friend-
@@ -19,14 +19,14 @@
  * 
  * 2. Synchronization
  * 
- * Threads are synchronized in the "threadfunction" method with the use of a barrier.
+ * Threads are synchronized in the "thread_function" method with the use of a barrier.
  * More specifically, we have to synchronize them in two points during execution. Rig-
  * ht before Phase 2 and before Phase 3. The reason for this is that all threads shou-
  * ld have computed their local prefix sum before thread 0 calculates final element v-
  * alues. Additionally, thread 0 has to have finished computing final values of the o-
- * ther threads before they can start updating their chunks.
+ * ther threads before they can start updating their local chunks.
  * 
- * 3. Execution and Correctness
+ * 3. Correctness and Performance
  * 
  * The correctness of the parallel execution was ensured since the algorithm produces
  * the exact same output in all cases. An automated script was created to execute the
@@ -34,13 +34,16 @@
  * ts from the number of threads to the maximum allowed value.
  * 
  * Moreover, the performance of the algorithm was calculated with the use of <time.h>
- * library. The performance can be printed after uncommenting the appropriate section
- * in "main" method. It seems that for all cases the serial implementation runs fast-
- * er than the parallel one. The reason for this is that thread creation can be quite
- * costly. Since our calculations are not that demanding we realise that creating mu-
- * ltiple threads becomes an overkill.
+ * library. It seems that in almost all cases the serial implementation performs bet-
+ * ter than the parallel one. The reason for this is that thread creation can be qui-
+ * te costly. Since our calculations are not that demanding we realise that creating 
+ * multiple threads becomes an overkill. When strictly timing execution (basically o-
+ * nly prefix sum calculation measurement) we are able to achieve approximately a 1.5x
+ * speedup by running the parallel version with the maximum allowed number of elements
+ * and almost a 2x speedup when running the program multiple times inside a loop, aga-
+ * in, with the maximum allowed number of elements.
  * 
- * **/
+ */
 
 // Note that NITEMS, NTHREADS and SHOWDATA should
 // be defined at compile time with -D options to gcc.
@@ -63,7 +66,7 @@ pthread_barrier_t barr; // Global barrier for all threads
 // Data structure for packing all arguments per thread together
 typedef struct arg_pack {
   int id; // Thread id
-  int *data; // Global array
+  int *data; // Global array pointer
   int start_index; // Thread chunk starting index
   int end_index; // Thread chunk ending index
 } arg_pack;
@@ -105,8 +108,16 @@ void sequentialprefixsum (int *data, int n) {
   }
 }
 
-// Compute the prefix sum of an array with specified indeces **in place** sequentially
-void threadprefixsum (int *data, int start_index, int end_index) {
+/*
+ * Function:  thread_prefix_sum 
+ * ----------------------------
+ * Computes the prefix sum of an array with specified indeces **in place** sequentially
+ *
+ * data: array with elements whose prefix sum we want to calculate
+ * start_index: the index that specifies the beginning of a thread's chunk
+ * end_index: the index that specifies the end of a thread's chunk
+ */
+void thread_prefix_sum (int *data, int start_index, int end_index) {
   int i;
 
   for (i = start_index+1; i < end_index + 1; i++) {
@@ -114,8 +125,14 @@ void threadprefixsum (int *data, int start_index, int end_index) {
   }
 }
 
-// Compute final value of every thread except the first one
-void finalelementprefix (int *data) {
+/*
+ * Function:  final_element_prefix 
+ * -------------------------------
+ * Computes the final value of every thread except the first one
+ *
+ * data: array with elements whose final element prefix value we want to calculate
+ */
+void final_element_prefix (int *data) {
   int i, curr_final_index, next_final_index;
 
   for (i = 0; i < NTHREADS - 1; i++) {
@@ -128,8 +145,16 @@ void finalelementprefix (int *data) {
   }
 }
 
-// Compute final values of own chunk
-void updatelocalvalues (int *data, int start_index, int end_index) {
+/*
+ * Function:  update_local_values 
+ * ------------------------------
+ * Computes the final values of own chunk
+ *
+ * data: array with elements whose prefix sum final values we want to calculate
+ * start_index: the index that specifies the beginning of a thread's chunk
+ * end_index: the index that specifies the end of a thread's chunk
+ */
+void update_local_values (int *data, int start_index, int end_index) {
   int i, prev_final_val;
 
   prev_final_val = data[start_index-1]; // Retrieve previous thread's last value
@@ -139,8 +164,14 @@ void updatelocalvalues (int *data, int start_index, int end_index) {
   }
 }
 
-// Thread function
-void *threadfunction(void *args)
+/*
+ * Function:  thread_function 
+ * --------------------------
+ * Pointer function that each thread executes once created
+ *
+ * args: data structure containing thread's id, pointer to array, starting and ending index of chunk
+ */
+void *thread_function(void *args)
 {
   int i, id, start_index, end_index, *data;
 
@@ -150,22 +181,29 @@ void *threadfunction(void *args)
   start_index = ((arg_pack *)args)->start_index;
   end_index = ((arg_pack *)args)->end_index;
 
-  threadprefixsum(data, start_index, end_index); // Phase 1 - Local chunk prefix sum calculation
+  thread_prefix_sum(data, start_index, end_index); // Phase 1 - Local chunk prefix sum calculation
 
   pthread_barrier_wait(&barr); // All threads completed Phase 1
 
   if (id == 0){ // Phase 2 - Thread 0 computes the prefix sum of final elements
-    finalelementprefix(data);
+    final_element_prefix(data);
   }
 
   pthread_barrier_wait(&barr); // End of Phase 2 - barrier is reusable since Pthreads re-initialise it once all threads are synchronised
 
   if(id != 0){ // Phase 3 - All other threads read their previous thread's final cell and update their chunks (except last value)
-    updatelocalvalues(data, start_index, end_index);
+    update_local_values(data, start_index, end_index);
   }
 }
 
-// Function that initialises and invokes necessary components for the parallel computation of the prefix sum algorithm
+/*
+ * Function:  parallelprefixsum 
+ * ----------------------------
+ * Initialises and invokes necessary components for the parallel computation of the prefix sum algorithm
+ *
+ * data: array with elements whose prefix sum final values we want to calculate
+ * n: number of elements in "data" array
+ */
 void parallelprefixsum (int *data, int n) {
   int i;
   pthread_barrier_init(&barr, NULL, NTHREADS); // Barrier used for the synchronization of threads after Phase 1 and Phase 2
@@ -189,7 +227,7 @@ void parallelprefixsum (int *data, int n) {
   
   // Create the threads
   for (i = 0; i < NTHREADS; i++) {
-    pthread_create (&thread_array[i], PTHREAD_CREATE_JOINABLE, threadfunction, (void *) &threadargs[i]);
+    pthread_create (&thread_array[i], PTHREAD_CREATE_JOINABLE, thread_function, (void *) &threadargs[i]);
   }
 
   // Wait for the threads to finish
@@ -231,10 +269,10 @@ int main (int argc, char* argv[]) {
   
   stop = clock(); // End for parallel implementation
 
-  double serial = ((double) (mid - start)) / CLOCKS_PER_SEC;
-  double parallel = ((double) (stop - mid)) / CLOCKS_PER_SEC;
-  printf("Serial execution runtime =     %fs\n", serial);
-  printf("Parallel execution runtime =   %fs\n", parallel);
+  // double serial = ((double) (mid - start)) / CLOCKS_PER_SEC;
+  // double parallel = ((double) (stop - mid)) / CLOCKS_PER_SEC;
+  // printf("Serial execution runtime =     %fs\n", serial);
+  // printf("Parallel execution runtime =   %fs\n", parallel);
 
   // Check that the sequential and parallel results match
   if (checkresult(arr1, arr2, NITEMS))  {
