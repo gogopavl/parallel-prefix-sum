@@ -28,14 +28,14 @@
  * alues. Additionally, thread 0 has to have finished computing final values of the o-
  * ther threads before they can start updating their local chunks.
  * 
- * For performance reasons another approach was also implemented. In this case, each 
- * thread calculated its final element on its own (instead of thread 0 doing all the
- * work). The synchronization strategy here was that we used an array of semaphores,
+ * For performance reasons another approach was also implemented.  In this case, each 
+ * thread calculated its final element on its own  (instead of thread 0 doing all the
+ * work).  The synchronization strategy here was that we used an array of semaphores,
  * one for each thread. Each thread, from 0 to the last one, would calculate its last
  * element and release its lock. Then the next one would continue to its own calcula-
- * tion. Although this sounds like a good approach because it creates this "wave" in
- * synchronization and demonstrates well dependencies, it comes at a bigger cost in 
- * terms of data structures used (array of semaphores vs one barrier). Additionally,
+ * tion.  Although this sounds like a good approach because it creates this "wave" in
+ * synchronization and demonstrates well dependencies,  it comes at a bigger cost in 
+ * terms of data structures used (array of semaphores vs one barrier).  Additionally,
  * the performance is almost the same, so there is no point in using semaphores inst-
  * ead of a barrier.
  * 
@@ -50,7 +50,7 @@
  * Moreover, the performance of the algorithm was calculated with the use of <time.h>
  * library. It seems that in almost all cases the serial implementation performs bet-
  * ter than the parallel one. The reason for this is that thread creation can be qui-
- * te costly. Since our calculations are not that demanding we realise that creating 
+ * te costly.  Since our calculations are not that demanding we realise that creating 
  * multiple threads becomes an overkill. When strictly timing execution (basically o-
  * nly prefix sum calculation measurement) we are able to achieve approximately a 1.5x
  * speedup by running the parallel version with the maximum allowed number of elements
